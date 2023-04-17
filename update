@@ -180,6 +180,8 @@ def redrawAll(app):
                 font='monospace', size=15, bold=True)
     drawLabel(f'Fuel: {app.player.fuel}', 50, 20, fill='white', 
                 font='monospace', size=15, bold=True)
+    drawLabel(f'Points: {app.player.score}', 45, 40, fill='white', 
+                font='monospace', size=15, bold=True)
 
 def drawPlanet(app, planet):
     points = planet.points
@@ -246,10 +248,11 @@ def checkGroundCollisions(app):
     for i in range(len(app.landerPoints)):
         for index in range(3, len(planetPoints), 2):
             polygonTri = makePointsIntoTriangle(app, planetPoints[index - 3], planetPoints[index - 2], planetPoints[index - 1], planetPoints[index])
-            app.TESTTRI = polygonTri
+            
             if ContainPoint(app.landerPoints[i][0], app.landerPoints[i][1], polygonTri):
                 print("explosion", app.landerPoints[i][0], app.landerPoints[i][1], polygonTri)
                 app.stopMoving = True
+                app.TESTTRI = polygonTri
                 # app.player.visible = False
                 app.player.y -= 2.2
                 return True
