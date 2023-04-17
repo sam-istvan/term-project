@@ -1,0 +1,261 @@
+from cmu_graphics import *
+import math, copy, time
+
+#! class of spaceship
+class lander:
+    def __init__(self, x, y, vx, vy, ax, ay, angle, visible, fuel, points, score):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.ax = ax
+        self.ay = ay
+        self.angle = angle
+        self.visible = visible
+        self.fuel = fuel
+        self.points = points
+        self.score = score
+
+class planet:
+    def __init__(self, points, gravity):
+        self.points = points
+        self.gravity = gravity
+
+def onAppStart(app):
+    resetGame(app)
+
+def resetGame(app):
+    app.stepsPerSecond = 60
+    app.timeLast = None
+    app.timeNow = 0
+    app.width = 1500
+    app.height = 800
+    app.thrustOn = False
+    app.background = gradient('black', 'black', 'darkSlateGray', start='top')
+    app.gravityCurrent = 2
+    app.stopMoving = False
+    app.explodeShip = False
+    app.r = 1
+    app.TESTTRI = [0, 0, 0, 0, 0, 0]
+
+    loadNewLander(app)
+    
+
+
+#! make new insatnces of a lander and harcoded planet for now 
+def loadNewLander(app):
+    app.player = lander(150, 10, 100, 0, 0, 0, 270, True, 1000, 0, 0)
+    app.player.points =  [app.player.x, app.player.y, app.player.x + 10, 
+                            app.player.y + 5, app.player.x + 12.5, app.player.y + 15, 
+                            app.player.x + 10, app.player.y + 20, app.player.x + 12.5, 
+                            app.player.y + 25, app.player.x + 10, app.player.y + 25, 
+                            app.player.x + 7.5, app.player.y + 20, app.player.x + 2.5, 
+                            app.player.y + 20, app.player.x + 5, app.player.y + 25, 
+                            app.player.x - 5, app.player.y + 25, app.player.x - 2.5, 
+                            app.player.y + 20, app.player.x - 7.5, app.player.y + 20, 
+                            app.player.x - 10, app.player.y + 25, app.player.x - 12.5, 
+                            app.player.y + 25, app.player.x - 10, app.player.y + 20, 
+                            app.player.x - 12.5, app.player.y + 15, app.player.x - 10, 
+                            app.player.y + 5]
+    app.planet = planet([0, 800, 66, 718, 115, 420, 139, 420, 299, 492, 404, 492, 410, 313, 540, 598, 705, 685, 747, 685, 817, 632, 909, 727, 967, 530, 1085, 435, 1114, 206, 1204, 203, 1241, 203, 1340, 310, 1500, 404, 1500, 800], 2)
+
+#! time last and time now check delta 
+def onStep(app):
+    if app.stopMoving:
+        app.player.vx = 0
+        app.player.ax = 0
+        app.player.vy = 0
+        app.player.ay = 0
+        if app.explodeShip and app.r < 90:
+            app.r += 5
+        if app.r > 90:
+            app.explodeShip = False
+    else: 
+        #! begin tracking time for use in physics equations, delta T
+        if app.timeLast == None:
+            app.timeLast = time.time() 
+
+        #! track lander points and check if any touch surface
+        app.landerPoints  = [[app.player.x, app.player.y], [app.player.x + 10, 
+                            app.player.y + 5], [app.player.x + 12.5, app.player.y + 15], 
+                            [app.player.x + 10, app.player.y + 20], [app.player.x + 12.5, 
+                            app.player.y + 25], [app.player.x + 10, app.player.y + 25], 
+                            [app.player.x + 7.5, app.player.y + 20], [app.player.x + 2.5, 
+                            app.player.y + 20], [app.player.x + 5, app.player.y + 25], 
+                            [app.player.x - 5, app.player.y + 25], [app.player.x - 2.5, 
+                            app.player.y + 20], [app.player.x - 7.5, app.player.y + 20], 
+                            [app.player.x - 10, app.player.y + 25], [app.player.x - 12.5, 
+                            app.player.y + 25], [app.player.x - 10, app.player.y + 20], 
+                            [app.player.x - 12.5, app.player.y + 15], [app.player.x - 10, 
+                            app.player.y + 5]]
+        
+        checkLanding(app)
+        
+        
+        app.timeNow = time.time() 
+        app.deltaTime = (app.timeNow - app.timeLast)
+        
+        #! if the thrust is off only gravity applies
+        if not app.thrustOn:
+            app.player.ay = app.gravityCurrent
+            app.player.ax = 0
+
+        #! while thrust on split acc into x and y components 
+        if app.thrustOn and app.player.fuel >= 0:
+            app.player.fuel -= 1
+            app.player.ay = 3 * math.sin(app.player.angle * math.pi / 180) + 1
+            app.player.ax = 3 * math.cos(app.player.angle * math.pi / 180)
+        
+        #!check if fuel is full 
+        if app.player.fuel <= 0:
+            app.player.ay = app.gravityCurrent
+            app.player.ax = 0
+            app.player.fuel = 0
+        #! check if the lander is in the screen, possibly loop
+        if (app.player.y >= app.height - 25): #! HARDCODED FIX THIS
+            app.player.y = app.height - 25 #! HARDCODED FIX THIS
+            app.player.vy = 0
+        if (app.player.x >= app.width):
+            app.player.x = 5
+        if (app.player.x <= 0):
+            app.player.x = app.width - 5
+
+        #! update the velocities and acc
+        app.player.vy += app.player.ay
+        app.player.vx += app.player.ax
+        # print(app.player.vx,app.player.vy)
+        app.player.y = .5 * (app.player.ay) * (app.deltaTime)**2 + \
+            app.player.vy * app.deltaTime + app.player.y
+        app.player.x = .5 * (app.player.ax) * (app.deltaTime)**2 + \
+            app.player.vx * app.deltaTime + app.player.x
+        
+        app.timeLast = app.timeNow
+    
+def redrawAll(app):
+
+    drawPlanet(app, app.planet)
+    points = app.TESTTRI
+    drawPolygon(*points, fill='white')
+    if app.explodeShip:
+        #print(app.player.x, app.player.y)
+        x, y = app.player.x, app.player.y
+        drawStar(x, y, app.r, 5, rotateAngle=0, fill=gradient('yellow', 'orange', 'red'))
+        drawStar(x, y, app.r, 5, rotateAngle=45, fill=gradient('yellow', 'orange', 'red'))
+        drawStar(x, y, app.r, 5, rotateAngle=90, fill=gradient('yellow', 'orange', 'red'))   
+        drawStar(x, y, app.r, 5, rotateAngle=135, fill=gradient('yellow', 'orange', 'red'))
+    else:
+        drawPolygon( #! Player class points used in polygon 
+            app.player.x, app.player.y, app.player.x + 10, 
+                            app.player.y + 5, app.player.x + 12.5, app.player.y + 15, 
+                            app.player.x + 10, app.player.y + 20, app.player.x + 12.5, 
+                            app.player.y + 25, app.player.x + 10, app.player.y + 25, 
+                            app.player.x + 7.5, app.player.y + 20, app.player.x + 2.5, 
+                            app.player.y + 20, app.player.x + 5, app.player.y + 25, 
+                            app.player.x - 5, app.player.y + 25, app.player.x - 2.5, 
+                            app.player.y + 20, app.player.x - 7.5, app.player.y + 20, 
+                            app.player.x - 10, app.player.y + 25, app.player.x - 12.5, 
+                            app.player.y + 25, app.player.x - 10, app.player.y + 20, 
+                            app.player.x - 12.5, app.player.y + 15, app.player.x - 10, 
+                            app.player.y + 5,
+            
+            rotateAngle=app.player.angle + 90,
+            fill='red' if app.thrustOn and not app.stopMoving else 'blue',
+            visible=app.player.visible
+        )
+    #! hardcoded stand in for surface of planet to test collision 
+    drawPolygon(500, 400, 700, 400, 550, 450, fill='white')
+    
+    #? labels for displaying information 
+    drawLabel(f'Horizontal Velocity: {int(app.player.vx // 10)}', 1300, 50, fill='white', 
+                font='monospace', size=15, bold=True)
+    drawLabel(f'Vertical Velocity: {int(app.player.vy // 10)}', 1300, 70, fill='white', 
+                font='monospace', size=15, bold=True)
+    drawLabel(f'Angle: {int((app.player.angle - 270) % 360)}', 1300, 90, fill='white', 
+                font='monospace', size=15, bold=True)
+    drawLabel(f'Fuel: {app.player.fuel}', 50, 20, fill='white', 
+                font='monospace', size=15, bold=True)
+
+def drawPlanet(app, planet):
+    points = planet.points
+    drawPolygon(*points, border='white', fill=None)
+
+def checkLanding(app):
+    if checkGroundCollisions(app):
+        if (((app.player.angle - 270) % 360 >= 30) and 
+            ((app.player.angle - 270) % 360 <= 335)):
+            app.explodeShip = True
+            app.player.visible = False
+            return True
+        if (abs(int(app.player.vx // 10)) >= 4) or (abs(int(app.player.vy // 10)) >= 10):
+            app.explodeShip = True
+            app.player.visible = False
+        else: 
+            return False
+
+def onKeyHold(app, keys):   
+    if 'right' in keys and not app.stopMoving:
+        app.player.angle += 3
+    if 'left' in keys and not app.stopMoving:
+        app.player.angle -= 3
+    if 'l' in keys: 
+        #! increase gravity to test higher speed collision 
+        app.gravityCurrent = 100
+    
+def onKeyPress(app, key):
+    if key == 'space' and app.player.fuel > 0:
+        app.thrustOn = True
+    if key == 'r':
+        resetGame(app)
+
+def onKeyRelease(app, key):
+    if key == 'space':
+        app.thrustOn = False
+
+# def onMouseMove(app, mouseX, mouseY): #? dont need this, used to figure out x,y coords
+#     print(mouseX, mouseY)
+
+def distance(x1, y1, x2, y2):
+    return  ((y2 - y1)**2 + (x2 - x1)**2)**.5   
+
+#? form of herons formula, find area of triangle with only side lengths
+def triangleArea(x1, y1, x2, y2, x3, y3):
+   return abs((x1 * (y2 - y3) + x2 * (y3 - y1)
+                + x3 * (y1 - y2)) / 2)
+
+#! check if a point is inside a triangle 
+def ContainPoint(x, y, points):
+    x1, y1, x2, y2, x3, y3 = points
+    
+    triOriginal = triangleArea(x1, y1, x2, y2, x3, y3)
+    triA = triangleArea(x, y, x1, y1, x2, y2)
+    triB = triangleArea(x, y, x2, y2, x3, y3)
+    triC = triangleArea(x, y, x3, y3, x1, y1)
+
+    return triOriginal == triA + triB + triC
+
+#! checking if any points in the player polygon are contained by the ground polygon (triangles rn)
+def checkGroundCollisions(app):
+    planetPoints = app.planet.points
+    for i in range(len(app.landerPoints)):
+        for index in range(3, len(planetPoints)):
+            polygonTri = makePointsIntoTriangle(app, planetPoints[index - 3], planetPoints[index - 2], planetPoints[index - 1], planetPoints[index])
+            app.TESTTRI = polygonTri
+            if ContainPoint(app.landerPoints[i][0], app.landerPoints[i][1], polygonTri):
+                print("explosion", app.landerPoints[i][0], app.landerPoints[i][1], polygonTri)
+                app.stopMoving = True
+                # app.player.visible = False
+                app.player.y -= 2.2
+                return True
+    else: return False
+
+def makePointsIntoTriangle(app, x1, y1, x2, y2):
+    x3 = (x1 + x2) / 2
+    y3 = ((y1 + y2) / 2) + 10
+    return x1, y1, x2, y2, x3, y3
+
+
+def main():
+    runApp()
+    
+if __name__ == '__main__':
+    main()
