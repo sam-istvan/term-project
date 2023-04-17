@@ -1,0 +1,325 @@
+from cmu_graphics import *
+import math, copy, time
+from PIL import Image, ImageDraw
+
+#! class of spaceship
+class lander:
+    def __init__(self, x, y, vx, vy, ax, ay, 
+                angle, visible, fuel, points, score):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.ax = ax
+        self.ay = ay
+        self.angle = angle
+        self.visible = visible
+        self.fuel = fuel
+        self.points = points
+        self.score = score
+
+class planet:
+    def __init__(self, points, gravity):
+        self.points = points
+        self.gravity = gravity
+
+def game_onAppStart(app):
+    resetGame(app)
+
+def resetGame(app):
+    app.stepsPerSecond = 60
+    app.timeLast = None
+    app.timeNow = 0
+    app.width = 1500
+    app.height = 800
+    app.thrustOn = False
+    app.background = gradient('black', 'black', 'darkSlateGray', start='top')
+    app.gravityCurrent = 1.5
+    app.stopMoving = False
+    app.explodeShip = False
+    app.r = 1
+    loadNewLander(app)
+
+#! make new insatnces of a lander and harcoded planet for now 
+def loadNewLander(app):
+    app.player = lander(150, 10, 100, 0, 0, 0, 270, True, 1000, 0, 0)
+    app.player.points = [app.player.x, app.player.y, app.player.x + 10, 
+                app.player.y + 5, app.player.x + 12.5, app.player.y + 15, 
+                app.player.x + 10, app.player.y + 20, app.player.x + 12.5, 
+                app.player.y + 25, app.player.x + 10, app.player.y + 25, 
+                app.player.x + 7.5, app.player.y + 20, app.player.x + 2.5, 
+                app.player.y + 20, app.player.x + 5, app.player.y + 25, 
+                app.player.x - 5, app.player.y + 25, app.player.x - 2.5, 
+                app.player.y + 20, app.player.x - 7.5, app.player.y + 20, 
+                app.player.x - 10, app.player.y + 25, app.player.x - 12.5, 
+                app.player.y + 25, app.player.x - 10, app.player.y + 20, 
+                app.player.x - 12.5, app.player.y + 15, app.player.x - 10, 
+                app.player.y + 5]
+    app.planet = planet([0, 800, 66, 718, 115, 
+    420, 139, 420, 299, 492, 404, 492, 
+    540, 598, 705, 685, 747, 685, 817, 632, 909, 
+    727, 967, 530, 1085, 435, 1114, 206, 1204, 203, 
+    1241, 203, 1340, 310, 1500, 404, 1500, 800], 2)
+
+#! time last and time now check delta 
+def game_onStep(app):
+    if app.stopMoving:
+        app.player.vx = 0
+        app.player.ax = 0
+        app.player.vy = 0
+        app.player.ay = 0
+        if app.explodeShip and app.r < 90:
+            app.r += 5
+        if app.r > 90:
+            app.explodeShip = False
+    else: 
+        
+        #! begin tracking time for use in physics equations, delta T
+        if app.timeLast == None:
+            app.timeLast = time.time() 
+
+        #! track lander points and check if any touch surface
+        app.landerPoints  = [[app.player.x, app.player.y], [app.player.x + 10, 
+        app.player.y + 5], [app.player.x + 12.5, app.player.y + 15], 
+        [app.player.x + 10, app.player.y + 20], [app.player.x + 12.5, 
+        app.player.y + 25], [app.player.x + 10, app.player.y + 25], 
+        [app.player.x + 7.5, app.player.y + 20], [app.player.x + 2.5, 
+        app.player.y + 20], [app.player.x + 5, app.player.y + 25], 
+        [app.player.x - 5, app.player.y + 25], [app.player.x - 2.5, 
+        app.player.y + 20], [app.player.x - 7.5, app.player.y + 20], 
+        [app.player.x - 10, app.player.y + 25], [app.player.x - 12.5, 
+        app.player.y + 25], [app.player.x - 10, app.player.y + 20], 
+        [app.player.x - 12.5, app.player.y + 15], [app.player.x - 10, 
+        app.player.y + 5]]
+
+        app.timeNow = time.time() 
+        app.deltaTime = (app.timeNow - app.timeLast)
+        
+        #! if the thrust is off only gravity applies
+        if not app.thrustOn:
+            app.player.ay = app.gravityCurrent
+            app.player.ax = 0
+
+        #! while thrust on split acc into x and y components 
+        if app.thrustOn and app.player.fuel >= 0:
+            app.player.points = [app.player.x, app.player.y, app.player.x + 10, 
+                app.player.y + 5, app.player.x + 12.5, app.player.y + 15, 
+                app.player.x + 10, app.player.y + 20, app.player.x + 12.5, 
+                app.player.y + 25, app.player.x + 10, app.player.y + 25, 
+                app.player.x + 7.5, app.player.y + 20, app.player.x + 2.5, 
+                app.player.y + 20,  app.player.x + 5, app.player.y + 25, 
+                app.player.x, app.player.y + 50,
+                app.player.x - 5, app.player.y + 25, app.player.x - 2.5, 
+                app.player.y + 20, app.player.x - 7.5, app.player.y + 20, 
+                app.player.x - 10, app.player.y + 25, app.player.x - 12.5, 
+                app.player.y + 25, app.player.x - 10, app.player.y + 20, 
+                app.player.x - 12.5, app.player.y + 15, app.player.x - 10, 
+                app.player.y + 5]
+            app.player.fuel -= 1
+            app.player.ay = 2 * math.sin(app.player.angle * math.pi / 180) + 1
+            app.player.ax = 2 * math.cos(app.player.angle * math.pi / 180)
+        
+        #!check if fuel is full 
+        if app.player.fuel <= 0:
+            app.player.ay = app.gravityCurrent
+            app.player.ax = 0
+            app.player.fuel = 0
+
+        #! check if the lander is in the screen, possibly loop
+        if (app.player.y >= app.height - 25): 
+            app.player.y = app.height - 25 
+            app.player.vy = 0
+        if (app.player.x >= app.width):
+            app.player.x = 5
+        if (app.player.x <= 0):
+            app.player.x = app.width - 5
+
+        #! update the velocities and acc
+        app.player.vy += app.player.ay
+        app.player.vx += app.player.ax
+        
+        app.player.y = .5 * (app.player.ay) * (app.deltaTime)**2 + \
+            app.player.vy * app.deltaTime + app.player.y
+        app.player.x = .5 * (app.player.ax) * (app.deltaTime)**2 + \
+            app.player.vx * app.deltaTime + app.player.x
+        
+        app.timeLast = app.timeNow
+        
+        #! check if there is a collision, and if there is the legality of it
+        checkLanding(app) 
+        
+        if app.stopMoving:
+            if not app.explodeShip:
+                app.player.score += 10
+                time.sleep(.5)
+                app.player.x = 10
+                app.player.vx = 100
+                app.player.y = 10
+                app.stopMoving = False
+
+    
+def game_redrawAll(app):
+    if (app.player.fuel <= 0 and app.stopMoving) or app.stopMoving:
+        drawLabel("Game Over", app.width //2 , 
+        app.height // 2, fill='red', size = 30)
+        drawLabel(f'Score: {app.player.score}', 
+        app.width // 2 , app.height // 2 + 50, 
+        fill ='lightGray', size= 20, bold = True)
+
+    drawPlanet(app, app.planet)
+    
+    if app.explodeShip:
+        x, y = app.player.x, app.player.y
+        drawStar(x, y, app.r, 5, rotateAngle=0, 
+        fill=gradient('yellow', 'orange', 'red'))
+        drawStar(x, y, app.r, 5, rotateAngle=45, 
+        fill=gradient('yellow', 'orange', 'red'))
+        drawStar(x, y, app.r, 5, rotateAngle=90, 
+        fill=gradient('yellow', 'orange', 'red'))   
+        drawStar(x, y, app.r, 5, rotateAngle=135, 
+        fill=gradient('yellow', 'orange', 'red'))
+    else:
+        drawPolygon( #! Player class points used in polygon 
+            app.player.x, app.player.y, app.player.x + 10, 
+            app.player.y + 5, app.player.x + 12.5, app.player.y + 15, 
+            app.player.x + 10, app.player.y + 20, app.player.x + 12.5, 
+            app.player.y + 25, app.player.x + 10, app.player.y + 25, 
+            app.player.x + 7.5, app.player.y + 20, app.player.x + 2.5, 
+            app.player.y + 20, app.player.x + 5, app.player.y + 25, 
+            app.player.x - 5, app.player.y + 25, app.player.x - 2.5, 
+            app.player.y + 20, app.player.x - 7.5, app.player.y + 20, 
+            app.player.x - 10, app.player.y + 25, app.player.x - 12.5, 
+            app.player.y + 25, app.player.x - 10, app.player.y + 20, 
+            app.player.x - 12.5, app.player.y + 15, app.player.x - 10, 
+            app.player.y + 5,
+            
+            rotateAngle=app.player.angle + 90, border='white',
+            fill='red' if app.thrustOn and not app.stopMoving else None,
+            visible=app.player.visible
+        )
+
+    #? labels for displaying information 
+    drawLabel(f'Horizontal Velocity: {int(app.player.vx // 10)}', 
+    1300, 50, fill='white', 
+                font='monospace', size=15, bold=True)
+    drawLabel(f'Vertical Velocity: {int(app.player.vy // 10)}', 1300, 70, 
+    fill='white', font='monospace', size=15, bold=True)
+    drawLabel(f'Angle: {int((app.player.angle - 270) % 360)}', 1300, 90, 
+    fill='white', font='monospace', size=15, bold=True)
+    drawLabel(f'Fuel: {app.player.fuel}', 50, 20, 
+    fill='white', font='monospace', size=15, bold=True)
+    drawLabel(f'Points: {app.player.score}', 50, 40, 
+    fill='white', font='monospace', size=15, bold=True)
+
+#! draw the polyogn of the planet, 
+#! will be used with OOP to have different level
+def drawPlanet(app, planet):
+    points = planet.points
+    drawPolygon(*points, border='white', 
+    fill=gradient('gray', 'darkGray', 'white', 'gray'))
+
+def checkLanding(app):
+    if checkGroundCollisions(app):
+        if (((app.player.angle - 270) % 360 >= 30) and 
+            ((app.player.angle - 270) % 360 <= 335)):
+            app.explodeShip = True
+            app.player.visible = False
+            return True
+        if ((abs(int(app.player.vx // 10)) >= 4) or 
+        (abs(int(app.player.vy // 10)) >= 10)):
+            app.explodeShip = True
+            app.player.visible = False
+            return True
+        else: 
+            return False
+    return True
+
+def game_onKeyHold(app, keys):   
+    if 'right' in keys and not app.stopMoving:
+        app.player.angle += 3
+    if 'left' in keys and not app.stopMoving:
+        app.player.angle -= 3
+    if 'l' in keys: 
+        #! increase gravity to test higher speed collision 
+        app.gravityCurrent = 100
+    
+def game_onKeyPress(app, key):
+    if key == 'space' and app.player.fuel > 0:
+        app.thrustOn = True
+    if key == 'r':
+        resetGame(app)
+
+def game_onKeyRelease(app, key):
+    if key == 'space':
+        app.thrustOn = False
+
+def distance(x1, y1, x2, y2):
+    return  ((y2 - y1)**2 + (x2 - x1)**2)**.5   
+
+#? form of herons formula, find area of triangle with only side lengths
+def triangleArea(x1, y1, x2, y2, x3, y3):
+   return abs((x1 * (y2 - y3) + x2 * (y3 - y1)
+                + x3 * (y1 - y2)) ) / 2
+
+#! check if a point is inside a triangle 
+def ContainPoint(x, y, points):
+    x1, y1, x2, y2, x3, y3 = points
+    
+    triOriginal = triangleArea(x1, y1, x2, y2, x3, y3)
+    triA = triangleArea(x, y, x1, y1, x2, y2)
+    triB = triangleArea(x, y, x2, y2, x3, y3)
+    triC = triangleArea(x, y, x3, y3, x1, y1)
+
+    return triOriginal == triA + triB + triC
+
+#! checking if any points in the player 
+# !polygon are contained by the ground polygon (triangles rn)
+def checkGroundCollisions(app):
+    planetPoints = app.planet.points
+    for i in range(len(app.landerPoints)):
+        for index in range(3, len(planetPoints), 2):
+            polygonTri = makePointsIntoTriangle(app, 
+            planetPoints[index - 3], planetPoints[index - 2], 
+            planetPoints[index - 1], planetPoints[index])
+            
+            if ContainPoint(app.landerPoints[i][0],
+             app.landerPoints[i][1], polygonTri):
+                app.stopMoving = True
+                app.player.y -= 2.2
+                return True
+    else: 
+        return False
+
+def makePointsIntoTriangle(app, x1, y1, x2, y2):
+    x3 = (x1 + x2) / 2
+    y3 = ((y1 + y2) / 2) + 2000
+    return x1, y1, x2, y2, x3, y3
+
+def menu_redrawAll(app):
+    drawImage(app.sprite, -200, -150)
+    drawRect(app.width // 2, app.height // 2, 
+    300, 100, fill='grey', opacity=50, align='center', 
+    border='lightBlue')
+    drawLabel("Start Game", app.width // 2, app.height // 2, 
+    bold=True, size = 35, font='monospace', fill='lightBlue')
+    drawLabel("Solar Lander", app.width // 2, app.height // 2 - 200, 
+    size = 100, font='monospace', bold=True, fill='lightBlue')
+    
+
+def menu_onMousePress(app, mouseX, mouseY):
+    if ((mouseX >= (app.width // 2) - 100 and 
+    mouseX <= (app.width // 2) + 100 and
+    mouseY >= (app.height // 2) - 50 and 
+    mouseY <= (app.height // 2) + 50)):
+        setActiveScreen('game')
+        resetGame(app)
+
+def menu_onAppStart(app):
+    
+    app.sprite = CMUImage(Image.open('space2.png'))
+    
+def main():
+    runAppWithScreens(initialScreen='menu')
+    
+if __name__ == '__main__':
+    main()
