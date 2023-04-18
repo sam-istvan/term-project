@@ -1,0 +1,85 @@
+from cmu_graphics import *
+import math, time, copy, random 
+def generatePlanet(app):
+    app.listFlats = []
+    app.numPoints = random.randint(10, 31)
+    xValues = [0]
+    yValues = [800]
+    app.points=[]
+    randIndex = 0
+    for i in range(app.numPoints):
+        xValues.sort()
+        posX = random.randint(10, 1490)
+        while abs(posX - xValues[randIndex - 1]) <= 20:
+            xValues.sort()
+            posX = random.randint(10, 1480)
+        xValues.append(posX)
+        yValues.append(random.randint(550, 750))
+    xValues.sort()
+    
+
+    app.numFlatSpots = random.randint(1, 5)
+    print(app.numFlatSpots)
+    for i in range(app.numFlatSpots):
+        index = 0
+        while index == 0 or index == len(xValues) - 1:
+            flatStart = random.choice(xValues)
+            index = xValues.index(flatStart)
+
+        yValues[index - 1] = yValues[index]
+        app.listFlats.append((xValues[i], yValues[i]))
+   
+
+    print(app.listFlats)
+
+    for i in range(len(xValues)):
+        app.points.append(xValues[i])
+        app.points.append(yValues[i])
+    app.points.append(1500)
+    app.points.append(800)
+    app.points[0] = 0
+    app.points[1] = 800
+
+    print(app.points)
+    app.points = cleanPoints(app, app.points)
+
+def cleanPoints(app, points):
+    for i in range(3, len(points), 2):
+        if points[i] < points[i - 1]:
+            if points[i] + 75 > points[i - 1]:
+               points[i] = points[i] - (.9  * abs(points[i - 1] - points[i]))   
+        if points[i] > points[i - 1]:
+            if points[i] - 75 < points[i - 1]:
+                points[i] = points[i] - (.9  * abs(points[i - 1] - points[i]))
+    return points
+
+
+    
+
+
+def redrawAll(app):
+    drawPolygon(*app.points, fill='black')
+
+
+def generateNumPoints(app):
+    pass
+
+def onStep(app):
+    pass
+
+def onMousePress(app, mouseX, mouseY):
+    app.x = mouseX
+    app.y = mouseY
+      
+
+def onKeyHold(app, keys):
+    pass
+
+def onKeyRelease(app, key):
+    pass
+def main():
+    runApp(width=1500, height=800)
+    
+
+if __name__ == '__main__':
+    main()
