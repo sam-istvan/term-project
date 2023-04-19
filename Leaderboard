@@ -397,7 +397,6 @@ def menu_redrawAll(app):
 def menu_onKeyPress(app, key):
     if 'space' == key:
         setActiveScreen('nameScreen')
-        # resetGame(app)
     if 'l' == key or 'L' == key:
         setActiveScreen('leaderboard')
        
@@ -425,12 +424,20 @@ def leaderboard_redrawAll(app):
     drawRect(150, 750, 200, 50, align='center', 
     fill='gray', opacity=50, border='cyan')
     drawLabel("Press M for Menu", 150, 750, fill='cyan', size=15)
-    for countNames in range(len(app.leaderBoardList)):
-        drawLabel(f'{app.leaderBoardList[countNames][0]}:   {app.leaderBoardList[countNames][1]}', 
-        app.width // 2, 120 + 20 * countNames, size=20, fill='cyan', align='center')
-    
-
-
+    drawLabel("Leaderboard", app.width // 2, 50, align='center', 
+    fill='white', bold=True, font='monospace', size=60)
+    if len(app.leaderBoardList) > 10:
+         for countNames in range(10):
+            drawLabel(f'{app.leaderBoardList[countNames][1]}:\
+                {app.leaderBoardList[countNames][0]}', 
+            app.width // 2, 120 + 40 * countNames, size=40, 
+            fill='white', font='monospace', bold=True, align='center')
+    else:
+        for countNames in range(len(app.leaderBoardList)):
+            drawLabel(f'{app.leaderBoardList[countNames][1]}:   {app.leaderBoardList[countNames][0]}', 
+            app.width // 2, 120 + 40 * countNames, size=40, 
+            fill='white', bold=True, font='monospace', align='center')
+            
 def leaderboard_onKeyPress(app, key):
     if key == 'm' or key == 'M':
         setActiveScreen('menu')
@@ -446,7 +453,7 @@ def nameScreen_onAppStart(app):
     
 def nameScreen_redrawAll(app):
     drawImage(app.nameMenuBack, 0, 0)
-    drawLabel("Enter Name, Then Press Space To Start", app.width // 2, 200, size = 40,
+    drawLabel("Enter Name, Then Press Enter To Start", app.width // 2, 200, size = 40,
      align='center', fill='cyan', font='monospace')
     drawLabel(f'{app.nameMessage}', app.width // 2, app.height // 2, 
     align='center', fill='cyan', size=30, font='monospace')
@@ -457,7 +464,7 @@ def nameScreen_onKeyPress(app, key):
         app.nameMessage += key.upper()
     if key == 'backspace':
         app.nameMessage = app.nameMessage[:len(app.nameMessage) - 1]
-    if key == 'space':
+    if key == 'enter':
         app.name = app.nameMessage
         setActiveScreen('game')
         app.nameMessage = ''
