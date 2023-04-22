@@ -1,0 +1,734 @@
+from cmu_graphics import *
+import math, time, random
+from PIL import Image
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# Citations for images
+# https://unsplash.com/photos/c9OCWLka764
+
+# https://unsplash.com/photos/uC21aXJ7yQs
+
+# https://unsplash.com/photos/f8cdJZwI3oI
+
+# https://unsplash.com/photos/t7EL2iG3jMc
+
+# https://www.vhv.rs/viewpic/hoJbbxR_
+# cartoon-asteroid-transparent-background-hd-png-download/
+
+# https://www.pxfuel.com/en/desktop-wallpaper-ziycd
+
+# https://www.pxfuel.com/en/desktop-wallpaper-ziycd
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? CUSTOM CLASSES
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+class Lander:
+    def __init__(self, x, y, vx, vy, ax, ay,
+                 angle, visible, fuel, points, score, thrust):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.ax = ax
+        self.ay = ay
+        self.angle = angle
+        self.visible = visible
+        self.fuel = fuel
+        self.points = points
+        self.score = score
+        self.thrustCount = thrust
+
+    def drawLander(self, app):
+
+        drawPolygon(
+            *app.renderPoints, fill=None,
+            border='white', visible=self.visible
+        )
+
+    def applyPhysics(self, deltaTime):
+        self.vy += self.ay
+        self.vx += self.ax
+
+        self.y = self.ay * self.ay * deltaTime ** 2 + \
+                 self.vy * deltaTime + self.y
+        self.x = self.ay * self.ax * deltaTime ** 2 + \
+                 self.vx * deltaTime + self.x
+
+    def freeze(self):
+        self.vx = 0
+        self.ax = 0
+        self.vy = 0
+        self.ay = 0
+
+    def animateExplosion(self, app):
+        x, y = self.x, self.y
+
+        drawStar(
+            x, y, app.r, 5, rotateAngle=0,
+            fill=gradient('yellow', 'orange', 'red'),
+            visible=app.explosionVisible
+        )
+        drawStar(
+            x, y, app.r, 5, rotateAngle=45,
+            fill=gradient('yellow', 'orange', 'red'),
+            visible=app.explosionVisible
+        )
+        drawStar(
+            x, y, app.r, 5, rotateAngle=90,
+            fill=gradient('yellow', 'orange', 'red'),
+            visible=app.explosionVisible
+        )
+        drawStar(
+            x, y, app.r, 5, rotateAngle=135,
+            fill=gradient('yellow', 'orange', 'red'),
+            visible=app.explosionVisible
+        )
+
+    def drawFlame(self, app):
+        if app.thrustVariationCounter % 2 == 0:
+            drawPolygon(
+                *app.renderFlame1,
+                fill=gradient('red', 'red', 'orange')
+            )
+        else:
+            drawPolygon(
+                *app.renderFlame2,
+                fill=gradient('orange', 'orange', 'red')
+            )
+
+    def displayStats(self, app):
+        drawLabel(
+            f'Horizontal Velocity: {int(app.player.vx // 10)}',
+            1300, 50, fill='white', font='monospace', size=15, bold=True
+        )
+        drawLabel(
+            f'Vertical Velocity: {int(app.player.vy // 10)}', 1300, 70,
+            fill='white', font='monospace', size=15, bold=True
+        )
+        drawLabel(
+            f'Angle: {int((app.player.angle * 180 / math.pi) % 360)}',
+            1300, 90, fill='white', font='monospace', size=15, bold=True
+        )
+        drawLabel(
+            f'Fuel: {app.player.fuel}', 50, 20,
+            fill='white', font='monospace', size=15, bold=True
+        )
+        drawLabel(
+            f'Points: {app.player.score}', 50, 40,
+            fill='white', font='monospace', size=15, bold=True
+        )
+
+    def repositionShip(self, app):
+        self.x = 10
+        self.vx = 100
+        self.y = 10
+        app.stopMoving = False
+
+
+class planet:
+    def __init__(self, points):
+        self.points = points
+
+    def drawPlanet(self, app):
+        points = self.points
+        drawPolygon(*points, border='white',
+                    fill=app.planet.color)
+
+
+class Mercury(planet):
+    def __init__(self, points):
+        super().__init__(points)
+        self.gravity = 1
+        self.color = gradient('gray', 'darkGray', 'white', 'gray')
+
+
+class Venus(planet):
+    def __init__(self, points):
+        super().__init__(points)
+        self.gravity = 2
+        self.color = gradient('orange', 'yellow', 'brown')
+
+
+class Earth(planet):
+    def __init__(self, points):
+        super().__init__(points)
+        self.gravity = 2
+        self.color = gradient('green', 'lightGreen')
+
+
+class Jupiter(planet):
+    def __init__(self, points):
+        super().__init__(points)
+        self.gravity = 3
+        self.color = gradient('orange', 'orange')
+
+
+class Pluto(planet):
+    def __init__(self, points):
+        super().__init__(points)
+        self.gravity = .1
+        self.color = gradient('purple', 'gray')
+
+
+class Sun(planet):
+    def __init__(self, points):
+        super().__init__(points)
+        self.gravity = 100
+        self.color = gradient('yellow', 'orange')
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# Level Select
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def levelSelect_onAppStart(app):
+    app.selectedLevel = 'mercury'
+    app.levelSelect = Image.open('solarSystem.png')
+    app.levelSelect = app.levelSelect.resize((app.width, app.height + 10))
+    app.levelSelect = CMUImage(app.levelSelect)
+
+
+def levelSelect_redrawAll(app):
+    drawImage(app.levelSelect, 0, 0)
+    drawLabel("Choose Landing Target",
+              app.width // 2 - 250, 600, size=40,
+              align='center', fill='cyan', bold=True,
+              font='monospace')
+
+
+def levelSelect_onKeyPress(app, key):
+    if key == '1':
+        app.selectedLevel = 'sun'
+        resetGame(app)
+        setActiveScreen('game')
+    if key == '2':
+        app.selectedLevel = 'mercury'
+        resetGame(app)
+        setActiveScreen('game')
+    if key == '3':
+        app.selectedLevel = 'venus'
+        resetGame(app)
+        setActiveScreen('game')
+    if key == '4':
+        app.selectedLevel = 'earth'
+        resetGame(app)
+        setActiveScreen('game')
+    if key == '5':
+        app.selectedLevel = 'jupiter'
+        resetGame(app)
+        setActiveScreen('game')
+    if key == '6':
+        app.selectedLevel = 'pluto'
+        resetGame(app)
+        setActiveScreen('game')
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# GAME CONSTANTS AND RESET
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def game_onAppStart(app):
+    app.name = ""
+    app.selectedLevel = None
+    resetGame(app)
+
+
+def resetGame(app):
+    app.stepsPerSecond = 60
+    app.timeLast = None
+    app.stepsPerSecond = 40
+    app.timeLast = None
+    app.timeNow = 0
+    app.width = 1500
+    app.height = 800
+    app.thrustOn = False
+
+    app.stopMoving = False
+    app.explodeShip = False
+    app.r = 1
+    app.endingCounter = 0
+    app.thrustVariationCounter = 0
+    app.gameBack = Image.open('gameBack.jpg')
+    app.gameBack = app.gameBack.resize((app.width, app.height))
+    app.gameBack = CMUImage(app.gameBack)
+
+    app.points = [0, -15, 10, -10, 12.5, 0, 10, 6, 12.5, 12.5, 10, 12.5, 9,
+                  8, 5, 8, 7.5, 12.5, 0, 12.5, -7.5, 12.5, -5, 8, -9, 8, -10,
+                  12.5, -12.5, 12.5, -10, 6, -12.5, 0, -10, -10]
+    app.renderPoints = [0] * len(app.points)
+
+    app.flamePoints1 = [7.5, 12.5, 0, 30, -7.5, 12.5]
+    app.flamePoints2 = [7.5, 12.5, 0, 22, -7.5, 12.5]
+
+    app.renderFlame1 = [0] * len(app.flamePoints1)
+    app.renderFlame2 = [0] * len(app.flamePoints2)
+
+    loadNewLander(app)
+    loadNewPlanet(app)
+
+    app.now = 0
+    app.continueGame = False
+    app.baseAngle = 0
+    app.rotateRate = 0
+    app.rotationStartTime = 0
+    app.frameCount = 0
+    app.fps = 0
+    app.explosionVisible = True
+
+    app.gameOver = False
+    app.safeLanding = False
+
+
+# make new instances of a lander and hardcoded planet for now
+def loadNewLander(app):
+    # x, y, vx, vy, ax, ay, angle, visible, fuel, points, score
+    app.player = Lander(150, 10, 100, 0, 0, 0, 0, True, 1000, 0, 0, .5)
+
+
+def loadNewPlanet(app):
+    planetPoints = generatePlanet(app)
+    # points of polygon of planet
+
+    if app.selectedLevel == 'mercury':
+        app.planet = Mercury(planetPoints)
+        app.player.thrustCount = 3
+    if app.selectedLevel == 'venus':
+        app.planet = Venus(planetPoints)
+        app.player.thrustCount = 5
+    if app.selectedLevel == 'earth':
+        app.planet = Earth(planetPoints)
+        app.player.thrustCount = 7
+    if app.selectedLevel == 'jupiter':
+        app.planet = Jupiter(planetPoints)
+        app.player.thrustCount = 8
+    if app.selectedLevel == 'sun':
+        app.planet = Sun(planetPoints)
+    if app.selectedLevel == 'pluto':
+        app.planet = Pluto(planetPoints)
+        app.player.thrustCount = 2
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? GAME TIME PASSING AND PLAYER INPUTS
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def game_onStep(app):
+    app.gravityCurrent = app.planet.gravity
+    if app.player.fuel <= 0:
+        app.thrustOn = False
+
+    app.now = time.time()
+
+    # tracking time for use in physics equations, delta T
+    if app.timeLast is None:
+        app.timeLast = app.now
+        app.timeLastFrame = app.now
+        return
+    app.deltaTime = (app.now - app.timeLast)
+
+    if app.stopMoving:
+        app.player.freeze()
+
+        if app.explodeShip and app.r < 90:
+            app.r += 5
+        if app.r > 90 and app.explodeShip:
+            # resetGame(app)
+            # setActiveScreen('menu')
+            app.explodeShip = False
+            app.explosionVisible = False
+            app.r = 1
+            app.gameOver = True
+    else:
+
+        # ! check if the lander is in the screen,  loop
+        if app.player.y >= app.height - 25:
+            app.player.y = app.height - 25
+            app.player.vy = 0
+        if app.player.x >= app.width:
+            app.player.x = 5
+        if app.player.x <= 0:
+            app.player.x = app.width - 5
+
+        # update the velocities and acc
+        app.player.applyPhysics(app.deltaTime)
+
+        # rotation
+        if app.rotateRate != 0:
+            app.player.angle = ((app.now - app.rotationStartTime)
+                                * app.rotateRate + app.baseAngle)
+
+        sin1 = math.sin(app.player.angle)
+        cos1 = math.cos(app.player.angle)
+
+        # Position update
+
+        # These equations rotate the points of the lander and
+        # Flame around 0,0 and then translates that rotated object to
+        # the app.player.x/y that is calculated using the physics
+        for i in range(0, len(app.points), 2):
+            app.renderPoints[i] = (app.player.x + app.points[i]
+                                   * cos1 - app.points[i + 1] * sin1)
+            app.renderPoints[i + 1] = (app.player.y +
+                                       app.points[i + 1] * cos1 + app.points[
+                                           i] * sin1)
+        for i in range(0, len(app.flamePoints1), 2):
+            app.renderFlame1[i] = (
+                    app.player.x + app.flamePoints1[i] * cos1
+                    - app.flamePoints1[i + 1] * sin1
+            )
+            app.renderFlame1[i + 1] = (
+                    app.player.y + app.flamePoints1[i + 1] * cos1 +
+                    app.flamePoints1[i] * sin1
+            )
+
+        for i in range(0, len(app.flamePoints2), 2):
+            app.renderFlame2[i] = (
+                    app.player.x + app.flamePoints2[i] * cos1 -
+                    app.flamePoints2[i + 1] * sin1
+            )
+            app.renderFlame2[i + 1] = (
+                    app.player.y + app.flamePoints2[i + 1] * cos1 +
+                    app.flamePoints2[i] * sin1
+            )
+
+        # if the thrust is off only gravity applies
+        if not app.thrustOn:
+            app.player.ay = app.gravityCurrent
+            app.player.ax = 0
+
+        if app.thrustOn and app.player.fuel >= 0:
+            app.thrustVariationCounter += 1
+            app.player.fuel -= 1
+            app.player.ay = (app.gravityCurrent + app.player.thrustCount
+                             * math.sin(app.player.angle - (math.pi / 2)))
+            app.player.ax = app.player.thrustCount * math.cos(app.player.angle
+                                                              - (math.pi / 2))
+
+        # check if fuel is empty and keep it from going negative
+        if app.player.fuel <= 0:
+            app.player.fuel = 0
+
+    # Collisions
+    if checkGroundCollisions(app):
+        app.stopMoving = True
+        if checkLanding(app):
+            app.explodeShip = True
+            app.player.visible = False
+        else:
+            app.safeLanding = True
+
+    deltaFrame = app.now - app.timeLastFrame
+
+    if deltaFrame > 1:
+        app.fps = int(app.frameCount / deltaFrame)
+        app.frameCount = 0
+        app.timeLastFrame = app.now
+
+    app.timeLast = app.now
+    app.frameCount += 1
+
+
+def game_redrawAll(app):
+    drawImage(app.gameBack, 0, 0)
+    drawLabel(f"fps: {app.fps}", 100, 100, fill='white')
+
+    if app.gameOver and not app.player.visible:
+        drawLabel(
+            "You Crashed!", app.width // 2, app.height // 2 - 200,
+            fill='orange', size=30
+        )
+        drawLabel(
+            f'Score: {app.player.score}',
+            app.width // 2, app.height // 2 - 100,
+            fill='lightGray', size=20, bold=True)
+        drawLabel(
+            "Press M to return to Menu", app.width // 2, 250,
+            fill='orange', size=30
+        )
+    if app.stopMoving and app.safeLanding and app.player.visible:
+        drawLabel(
+            "Nice Landing!", app.width // 2, 200, fill='orange', size=30
+        )
+
+        drawLabel(
+            "Press C to Continue", app.width // 2, 250, fill='orange',
+            size=30
+        )
+
+    if app.explodeShip:
+        app.player.animateExplosion(app)
+
+    else:
+        app.player.drawLander(app)
+        if app.thrustOn and not app.player.fuel <= 0 and not app.stopMoving:
+            app.player.drawFlame(app)
+
+    # draw current planet surface
+    app.planet.drawPlanet(app)
+
+    # labels for displaying information
+    app.player.displayStats(app)
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# PLAYER INPUT
+""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def game_onKeyPress(app, key):
+    if key == 'space' and app.player.fuel > 0:
+        app.thrustOn = True
+    if app.stopMoving and not app.explodeShip and key == 'c':
+        app.player.score += 10
+        app.player.repositionShip(app)
+    if app.stopMoving and app.explodeShip and key == 'c':
+        app.player.repositionShip(app)
+    if key == 'r':
+        resetGame(app)
+    if key == 'm' or key == 'M':
+        app.leaderBoardList.append((app.player.score, app.name))
+        app.leaderBoardList = sorted(app.leaderBoardList)
+        app.leaderBoardList = app.leaderBoardList[::-1]
+        setActiveScreen('menu')
+        resetGame(app)
+    if key == 'right':
+        app.rotateRate = 2.5
+        app.rotationStartTime = time.time()
+    if key == 'left':
+        app.rotateRate = -2.5
+        app.rotationStartTime = time.time()
+    if key == 'h':
+        app.gameOver = not app.gameOver
+    if key == 'l':
+        app.player.vx += 100
+    if key == 'o':
+        app.planet.gravity = 0
+        app.gravityCurrent = 0
+        app.player.freeze()
+
+
+def game_onKeyRelease(app, key):
+    if key == 'space':
+        app.thrustOn = False
+    if key == 'right':
+        app.rotateRate = 0
+        app.baseAngle = app.player.angle
+    if key == 'left':
+        app.rotateRate = 0
+        app.baseAngle = app.player.angle
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? COLLISION AND LANDING DETECTION
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def checkGroundCollisions(app):
+    planetPoints = app.planet.points
+
+    for shipPoint in range(1, len(app.renderPoints), 2):
+        for index in range(3, len(planetPoints), 2):
+
+            slope = (getSlope(
+                planetPoints[index - 3], planetPoints[index - 2],
+                planetPoints[index - 1], planetPoints[index]))
+
+            belowY = (
+                    slope * (app.renderPoints[shipPoint - 1] - planetPoints[
+                index - 3]) + planetPoints[index - 2]
+            )
+
+            if (
+                    planetPoints[index - 3] <= app.renderPoints[
+                shipPoint - 1] <=
+                    planetPoints[index - 1] and
+                    app.renderPoints[shipPoint] >= belowY
+            ):
+                return True
+    return False
+
+
+def checkLanding(app):
+    if 330 >= (app.player.angle * 180 / math.pi) % 360 >= 30:
+        return True
+    if ((abs(int(app.player.vx // 10)) >= 4) or
+            (abs(int(app.player.vy // 10)) >= 10)):
+        return True
+    else:
+        return False
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? HELPER FUNCTIONS
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def getSlope(x1, y1, x2, y2):
+    slope = (y2 - y1) / (x2 - x1)
+    return slope
+
+
+def distance(x1, y1, x2, y2):
+    return ((y2 - y1) ** 2 + (x2 - x1) ** 2) ** .5
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? MAP GENERATOR
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def generatePlanet(app):
+    curX = 0
+    xValues = [0]
+    yValues = [800]
+    points = []
+
+    while curX <= 1500:
+        prevX = random.randint(curX + 1, curX + 75)
+        if abs(prevX - curX) <= 50:
+            continue
+        curX = prevX
+        curY = random.randint(450, 700)
+        xValues.append(curX)
+        yValues.append(curY)
+
+    app.listFlats = []
+    numFlats = random.randint(3, 6)
+    for i in range(numFlats):
+        randIndex = random.randint(5, len(yValues) - 2)
+        yValues[randIndex - 1] = yValues[randIndex]
+
+        app.listFlats.append((xValues[randIndex - 1], xValues[randIndex]))
+
+
+    for i in range(len(xValues)):
+        points.append(xValues[i])
+        points.append(yValues[i])
+
+    points[2] = 1
+    points[3] = 700
+    points.append(app.width)
+    points.append(app.height)
+    
+    return points
+
+
+# ! check if x values are too sharp (too close together)
+# ! and corrects them if necessary
+def cleanPoints(app, points):
+    for i in range(3, len(points) + 1, 2):
+        if points[i - 1] - points[i - 3] <= 25:
+            points[i - 1] = 0
+            points[i] = 0
+    return points
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? MENU CODE
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def menu_redrawAll(app):
+    drawImage(app.back, 0, 0)
+
+
+def menu_onKeyPress(app, key):
+    if 'space' == key:
+        setActiveScreen('nameScreen')
+    if 'l' == key or 'L' == key:
+        setActiveScreen('leaderboard')
+
+
+def menu_onAppStart(app):
+    app.back = Image.open('startMenu.png')
+    app.back = app.back.resize((app.width, app.height))
+    app.back = CMUImage(app.back)
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? LEADERBOARD CODE
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def leaderboard_onAppStart(app):
+    app.leaderBoardList = [(10, 'QUINCY')]
+    app.backLeader = Image.open('SpaceLeaderboard.jpg')
+    app.backLeader = app.backLeader.resize((app.width, app.height))
+    app.backLeader = CMUImage(app.backLeader)
+    app.displayBoard = ''
+
+
+def leaderboard_redrawAll(app):
+    drawImage(app.backLeader, 0, 0)
+    drawRect(app.width // 2, 400, 400, 600, align='center', opacity=50)
+
+    drawRect(150, 750, 200, 50, align='center',
+             fill='gray', opacity=50, border='cyan')
+    drawLabel("Press M for Menu", 150, 750, fill='cyan', size=15)
+    drawLabel("Leaderboard", app.width // 2, 50, align='center',
+              fill='white', bold=True, font='monospace', size=60)
+
+    if len(app.leaderBoardList) > 15:
+        for countNames in range(15):
+            drawLabel(f'{app.leaderBoardList[countNames][1]}:' +
+                      f'{app.leaderBoardList[countNames][0]}',
+                      app.width // 2, 120 + 40 * countNames, size=40,
+                      fill='white', font='monospace', align='center')
+    else:
+        for countNames in range(len(app.leaderBoardList)):
+            drawLabel(f'{app.leaderBoardList[countNames][1]}:' +
+                      f'{app.leaderBoardList[countNames][0]}',
+                      app.width // 2, 120 + 40 * countNames, size=40,
+                      fill='white', font='monospace', align='center')
+
+
+def leaderboard_onKeyPress(app, key):
+    if key == 'm' or key == 'M':
+        setActiveScreen('menu')
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? ENTER NAME SCREEN
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def nameScreen_onAppStart(app):
+    app.nameMessage = ''
+    app.nameMenuBack = Image.open('nameMenu.jpg')
+    app.nameMenuBack = app.nameMenuBack.resize((app.width, app.height))
+    app.nameMenuBack = CMUImage(app.nameMenuBack)
+
+
+def nameScreen_redrawAll(app):
+    drawImage(app.nameMenuBack, 0, 0)
+    drawLabel("Type Name, Then Press Enter To Start",
+              app.width // 2, 200, size=40,
+              align='center', fill='cyan', font='monospace')
+    drawLabel(f'{app.nameMessage}', app.width // 2, app.height // 2,
+              align='center', fill='cyan', size=30, font='monospace')
+
+
+def nameScreen_onKeyPress(app, key):
+    if (key.isalpha() and not key == 'space' and len(app.nameMessage) < 7 and
+            not key == 'backspace' and not key == 'enter'):
+        app.nameMessage += key.upper()
+    if key == 'backspace':
+        app.nameMessage = app.nameMessage[:len(app.nameMessage) - 1]
+    if key == 'enter':
+        app.name = app.nameMessage
+        setActiveScreen('levelSelect')
+        app.nameMessage = ''
+
+
+def main():
+    runAppWithScreens(initialScreen='menu')
+
+
+if __name__ == '__main__':
+    main()
