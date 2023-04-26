@@ -1,0 +1,1043 @@
+from cmu_graphics import *
+import math, time, random
+from PIL import Image
+import os, pathlib
+import numpy as np
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# Citations for images
+# https://unsplash.com/photos/c9OCWLka764   LEADERBOARD
+
+# https://unsplash.com/photos/uC21aXJ7yQs   START MENU
+
+# https://unsplash.com/photos/f8cdJZwI3oI   GAME BACK
+
+# https://unsplash.com/photos/t7EL2iG3jMc   NAME MENU
+
+# https://www.vhv.rs/viewpic/hoJbbxR_
+# cartoon-asteroid-transparent-background-hd-png-download/
+# USED TO MAKE START MENU
+
+# https://mixkit.co/free-sound-effects/rocket/ ROCKET SOUND
+
+# https://pixabay.com/sound-effects/big-impact-7054/ IMPACT NOISE
+
+# https://pixabay.com/music/build-up-scenes-space-trip-114102/ MUSIC
+
+# https://www.vhv.rs/viewpic/hbimioo_big-gray-cloud-grey-cloud
+# -clipart-png-transparent/                                     CLOUD
+
+# https://inhumansforever.tumblr.com/post/621745259585699842/
+# who-is-inside-forming-that-red-tornado-adc                    TORNADO
+
+# https://www.pngwing.com/en/free-png-bkqsl                     Meteor
+
+# Everything else was hand drawn by me
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? CUSTOM CLASSES
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+class Lander:  # x pos, y pos, velocity x, velocity y
+    def __init__(self, x, y, vx, vy):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.ax = 0
+        self.ay = 0
+        self.angle = 0
+        self.visible = True
+        self.fuel = 500
+        self.score = 0
+        self.thrustCount = .5
+        self.points = \
+            [0, -15, 10, -10, 12.5, 0, 10, 6, 12.5, 12.5, 10, 12.5, 9,
+             8, 5, 8, 7.5, 12.5, 0, 12.5, -7.5, 12.5, -5, 8, -9, 8, -10,
+             12.5, -12.5, 12.5, -10, 6, -12.5, 0, -10, -10]
+        self.renderPoints = [0] * len(self.points)
+
+        self.flamePoints1 = [7.5, 12.5, 0, 30, -7.5, 12.5]
+        self.flamePoints2 = [7.5, 12.5, 0, 22, -7.5, 12.5]
+
+        self.renderFlame1 = [0] * len(self.flamePoints1)
+        self.renderFlame2 = [0] * len(self.flamePoints2)
+
+        self.baseAngle = 0
+        self.rotateRate = 0
+        self.rotationStartTime = 0
+
+    def drawLander(self, app):
+
+        drawPolygon(
+            *app.player.renderPoints, fill=None,
+            border='white', visible=self.visible
+        )
+
+    def applyPhysics(self, deltaTime):
+        self.vy = float(np.add(self.vy, self.ay))
+        self.vx = float(np.add(self.vx, self.ax))
+
+        self.y = self.ay * self.ay * deltaTime ** 2 + \
+                 self.vy * deltaTime + self.y
+        self.x = self.ay * self.ax * deltaTime ** 2 + \
+                 self.vx * deltaTime + self.x
+
+    def freeze(self):
+        self.vx = 0
+        self.ax = 0
+        self.vy = 0
+        self.ay = 0
+
+    def animateExplosion(self, app):
+        x, y = self.x, self.y
+
+        for i in range(5):
+            drawStar(
+                x, y, app.r, 5, rotateAngle=45 * i,
+                fill=gradient('yellow', 'orange', 'red'),
+                visible=app.explosionVisible
+            )
+
+    def drawFlame(self, app):
+        if app.thrustVariationCounter % 2 == 0:
+            drawPolygon(
+                *self.renderFlame1,
+                fill=gradient('red', 'red', 'orange')
+            )
+        else:
+            drawPolygon(
+                *self.renderFlame2,
+                fill=gradient('orange', 'orange', 'red')
+            )
+
+    def repositionShip(self):
+        self.x = 200
+        self.vx = 100
+        self.y = 10
+
+    def rotateRight(self):
+        self.rotateRate = 2.5
+        self.rotationStartTime = time.time()
+
+    def rotateLeft(self):
+        self.rotateRate = -2.5
+        self.rotationStartTime = time.time()
+
+
+class Planet:
+    def __init__(self, gravity, color, widthScreen, heightScreen):
+        self.gravity = gravity
+        self.color = color
+        self.listFlats = []
+        self.points = self.generatePlanet(widthScreen, heightScreen)
+        self.renderPoints = []
+        self.renderFlatPoints = []
+
+    def generatePlanet(self, widthScreen, heightScreen):
+        curX = 0
+        xValues = []
+        yValues = []
+        points = []
+        fullListLen = widthScreen * 150
+
+        while curX <= fullListLen:
+            prevX = random.randint(curX + 1, curX + 75)
+            if abs(prevX - curX) <= 50:
+                continue
+            curX = prevX
+            curY = random.randint(heightScreen * .5625, heightScreen * .875)
+            xValues.append(curX)
+            yValues.append(curY)
+
+        self.listFlats = []
+        numFlats = random.randint(4, 6) * (widthScreen // 10)
+        pastIndexes = []
+
+        while len(self.listFlats) < numFlats:
+            randIndex = random.randint(5, len(yValues) - 2)
+            if randIndex in pastIndexes:
+                continue
+
+            # make sure flat spots aren't directly next to each other
+            pastIndexes.append(randIndex - 1)
+            pastIndexes.append(randIndex)
+            pastIndexes.append(randIndex + 1)
+
+            multiplierValue = random.randint(1, 5)
+            yValues[randIndex - 1] = yValues[randIndex]
+            self.listFlats.append([xValues[randIndex - 1],
+                                   yValues[randIndex - 1], multiplierValue])
+            self.listFlats.append([xValues[randIndex],
+                                   yValues[randIndex], multiplierValue])
+
+        for i in range(len(xValues)):
+            points.append(xValues[i])
+            points.append(yValues[i])
+
+        halfFull = .5 * fullListLen
+        for r in range(1, len(points), 2):
+            points[r - 1] = \
+                float(np.subtract(points[r - 1], halfFull))
+        for r in range(len(self.listFlats)):
+            self.listFlats[r][0] = \
+                float(np.subtract(self.listFlats[r][0], halfFull))
+
+        return points
+
+    def drawPlanet(self, app):
+        points = self.points
+        self.renderPoints = []
+        self.renderFlatPoints = []
+
+        for y in range(1, len(points), 2):
+            if -1 * app.width * 1.1 <= points[y - 1] <= app.width * 1.1:
+                self.renderPoints.append(points[y - 1])
+                self.renderPoints.append(points[y])
+
+        for index in range(1, len(self.listFlats)-1):
+            if ((-1 * app.width * 1.1 <=
+                self.listFlats[index][0] <= app.width * 1.1)
+                and
+                ((-1 * app.width * 1.1 <=
+                  self.listFlats[index + 1][0] <= app.width * 1.1)
+                 or
+                 (-1 * app.width * 1.1 <=
+                  self.listFlats[index - 1][0] <= app.width * 1.1))):
+
+                self.renderFlatPoints.append(self.listFlats[index])
+
+        drawPolygon(0, app.height, 1, app.height * .9375, *self.renderPoints,
+                    app.width - 1, app.height * .875, app.width, app.height,
+                    border='white', fill=app.planet.color)
+        point = self.renderFlatPoints
+
+        # drawHighlights of flat points
+        for pointIndex in range(1, len(self.renderFlatPoints), 2):
+
+            xLabel = (point[pointIndex][0] + point[pointIndex - 1][0]) // 2
+
+            yLabel = point[pointIndex][1] + 20
+
+            drawLabel(f'{point[pointIndex][2]}X', xLabel, yLabel,
+                      fill='black', align='center')
+
+
+class Mercury(Planet):
+    def __init__(self, width, height):
+        super().__init__(1, gradient('gray', 'darkGray', 'white', 'gray'),
+                         width, height)
+        self.width = width
+        self.hazardCount = 0
+        self.hazardX = 0
+        self.hazardY = -50
+        self.hazardVx = -4
+        self.hazardVy = 4
+
+    def spawnHazard(self, x, y):
+        if self.hazardCount == 0:
+            self.hazardX = x
+            self.hazardY = y
+
+    def repositionHazard(self):
+        self.hazardX = random.randint(self.width * .25, self.width)
+        self.hazardY = -50
+        self.hazardVy = random.randint(2, 20)
+        self.hazardVx = random.randint(-7, 7)
+
+    def drawHazard(self, app):
+        drawCircle(self.hazardX, self.hazardY, 35, fill='white')
+        drawImage(app.meteor, self.hazardX, self.hazardY, align='center')
+
+
+class Venus(Planet):
+    def __init__(self, width, height):
+        super().__init__(2, gradient('orange', 'yellow', 'brown'),
+                         width, height)
+        self.hazardCount = 0
+        self.hazardX = 1
+        self.hazardY = 1
+        self.hazardW = 75
+        self.hazardH = 50
+
+        self.hazardVx = 2
+
+    def spawnHazard(self, x, y):
+        if self.hazardCount == 0:
+            self.hazardX = x
+            self.hazardY = 200
+
+    def drawHazard(self, app):
+        drawOval(self.hazardX, self.hazardY, self.hazardW, self.hazardH,
+                 fill=None)
+        drawRect(self.hazardX, self.hazardY, self.hazardW, app.height,
+                 fill=None, align='top')
+
+        drawImage(app.acidRain1, self.hazardX + 5, self.hazardY, align='top')
+        drawImage(app.acidRain2, self.hazardX + 5, self.hazardY * 2, align='top')
+        drawImage(app.cloud, self.hazardX, self.hazardY, align='center')
+
+
+class Earth(Planet):
+    def __init__(self, width, height):
+        super().__init__(2, gradient('green', 'lightGreen', 'green'),
+                         width, height)
+
+
+class Jupiter(Planet):
+    def __init__(self, width, height):
+        super().__init__(3, gradient('orange', 'orange', 'red', 'yellow'),
+                         width, height)
+        self.hazardPoints = []
+        self.hazardCount = 0
+        self.hazardX = 0
+        self.hazardY = 0
+
+    def drawHazard(self, app):
+        self.hazardPoints = [self.hazardX, self.hazardY, self.hazardX - 80, self.hazardY - 120,
+                    self.hazardX + 80, self.hazardY - 120]
+        drawPolygon(*self.hazardPoints, fill=None)
+        drawImage(app.tornado, self.hazardX, self.hazardY, align='bottom')
+
+
+class Pluto(Planet):
+    def __init__(self, width, height):
+        super().__init__(.1, gradient('purple', 'gray'),
+                         width, height)
+        self.hazardCount = 0
+        self.hazardX = 0
+        self.hazardY = 0
+        self.hazardVx = 4
+        self.hazardVy = 2
+
+
+    def spawnHazard(self, x, y):
+        if self.hazardCount == 0:
+            self.hazardX = x
+            self.hazardY = y
+
+    def drawHazard(self, app):
+        drawCircle(self.hazardX, self.hazardY, 35, fill='white')
+        drawImage(app.alien, self.hazardX, self.hazardY, align='center')
+
+
+
+class Sun(Planet):
+    def __init__(self, width, height):
+        super().__init__(40, gradient('yellow', 'orange'),
+                         width, height)
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# GAME CONSTANTS AND RESET
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def game_onAppStart(app):
+    app.name = ""
+    app.selectedLevel = None
+    resetGame(app)
+
+
+def resetGame(app):
+    app.stepsPerSecond = 60
+    app.timeLast = None
+    app.timeNow = 0
+    app.width = 1200
+    app.height = 640
+    app.thrustOn = False
+    app.hasHazard = False
+
+    app.stopMoving = False
+    app.explodeShip = False
+    app.r = 1
+    app.endingCounter = 0
+    app.thrustVariationCounter = 0
+    app.gameBack = Image.open('gameBack.jpg')
+    app.gameBack = app.gameBack.resize((app.width, app.height))
+    app.gameBack = CMUImage(app.gameBack)
+
+    app.alien = Image.open('alien.png')
+    app.alien = app.alien.resize((80, 80))
+    app.alien = CMUImage(app.alien)
+
+    app.cloud = Image.open('cloud.png')
+    app.cloud = app.cloud.resize((80, 50))
+    app.cloud = CMUImage(app.cloud)
+
+    app.acidRain1 = Image.open('acidRain.png')
+    app.acidRain1 = app.acidRain1.resize((120, 300))
+    app.acidRain1 = CMUImage(app.acidRain1)
+
+    app.acidRain2 = Image.open('acidRain.png')
+    app.acidRain2 = app.acidRain2.resize((120, 300))
+    app.acidRain2 = CMUImage(app.acidRain2)
+
+    app.meteor = Image.open('meteor.png')
+    app.meteor = app.meteor.resize((100, 100))
+    app.meteor = CMUImage(app.meteor)
+
+    app.tornado = Image.open('tornado.png')
+    app.tornado = app.tornado.resize((160, 135))
+    app.tornado = CMUImage(app.tornado)
+    app.tornadoTime = 0
+
+    app.player = Lander(25 + app.width * .2, 10, 100, 0)
+    loadNewPlanet(app)
+
+    app.now = 0
+    app.continueGame = False
+
+    app.explosionVisible = True
+
+    app.gameOver = False
+    app.safeLanding = False
+
+    app.frameCount = 0
+    app.fps = 0
+
+    app.sound1 = loadSound("rocketOn.mp3")
+    app.music = loadSound("music.mp3")
+    app.explosion = loadSound("explosion.mp3")
+    app.makeExploNoise = True
+
+
+def loadNewPlanet(app):
+    # points of polygon of planet
+
+    if app.selectedLevel == 'mercury':
+        app.planet = Mercury(app.width, app.height)
+        app.player.thrustCount = 3
+        app.hasHazard = True
+    if app.selectedLevel == 'venus':
+        app.planet = Venus(app.width, app.height)
+        app.player.thrustCount = 5
+        app.hasHazard = True
+    if app.selectedLevel == 'earth':
+        app.planet = Earth(app.width, app.height)
+        app.player.thrustCount = 7
+    if app.selectedLevel == 'jupiter':
+        app.planet = Jupiter(app.width, app.height)
+        app.player.thrustCount = 8
+        app.hasHazard = True
+    if app.selectedLevel == 'sun':
+        app.planet = Sun(app.width, app.height)
+        app.player.thrustCount = 8
+        app.player.fuel = 200
+    if app.selectedLevel == 'pluto':
+        app.planet = Pluto(app.width, app.height)
+        app.player.thrustCount = 2
+        app.hasHazard = True
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? GAME TIME PASSING AND PLAYER INPUTS
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def game_onStep(app):
+    if isinstance(app.planet, Pluto):
+        app.planet.spawnHazard(app.width * .9, app.height // 8)
+        app.planet.hazardCount += 1
+    if isinstance(app.planet, Venus):
+        app.planet.spawnHazard(app.width * .9, app.height // 8)
+        app.planet.hazardCount += 1
+    if isinstance(app.planet, Mercury):
+        x = random.randint(app.width // 2, app.width)
+        app.planet.spawnHazard(x, -100)
+        app.planet.hazardCount += 1
+
+    app.music.play(restart=False)
+    app.gravityCurrent = app.planet.gravity
+    if app.player.fuel <= 0:
+        app.thrustOn = False
+
+    app.now = time.time()
+
+    # tracking time for use in physics equations, delta T
+    if app.timeLast is None:
+        app.timeLast = app.now
+        app.timeLastFrame = app.now
+        return
+    app.deltaTime = (app.now - app.timeLast)
+
+    if app.stopMoving:
+        app.player.freeze()
+
+        if app.explodeShip and app.r < 90:
+            app.r += 5
+            if app.makeExploNoise:
+                app.explosion.play(restart=False)
+                app.makeExploNoise = False
+        if app.r > 90 and app.explodeShip:
+            app.explodeShip = False
+            app.explosionVisible = False
+            app.r = 1
+            app.gameOver = True
+
+    else:
+        prevX = app.player.x
+
+        # update the velocities and acc
+        app.player.applyPhysics(app.deltaTime)
+
+        # Pluto Hazard
+        if app.hasHazard and isinstance(app.planet, Pluto):
+            if app.planet.hazardX >= app.width - 25 or app.planet.hazardX <= 25:
+                app.planet.hazardVx *= -1
+            if app.planet.hazardY >= 325 or app.planet.hazardY <= 25:
+                app.planet.hazardVy *= -1
+
+            app.planet.hazardX += app.planet.hazardVx
+            app.planet.hazardY += app.planet.hazardVy
+
+        # Mercury Hazard
+        if app.hasHazard and isinstance(app.planet, Mercury):
+            if app.planet.hazardY >= app.height:
+                app.planet.repositionHazard()
+
+            app.planet.hazardX += app.planet.hazardVx
+            app.planet.hazardY += app.planet.hazardVy
+
+        # Jupiter Hazard
+        if app.hasHazard and isinstance(app.planet, Jupiter) \
+                and app.tornadoTime % 15 == 0:
+            xValues = app.planet.renderPoints[::2]
+            yValues = app.planet.renderPoints[1::2]
+            tornadoIndex = random.randint(0, len(xValues) - 1)
+            app.planet.hazardX = xValues[tornadoIndex]
+            app.planet.hazardY = yValues[tornadoIndex]
+        app.tornadoTime += 1
+
+        # Venus Hazard
+        if app.hasHazard and isinstance(app.planet, Venus):
+            if (app.planet.hazardX >= app.width - app.planet.hazardW or
+               app.planet.hazardX <= app.planet.hazardW):
+                app.planet.hazardVx *= -1
+
+            app.planet.hazardX += app.planet.hazardVx
+
+        deltaX = abs(app.player.x - prevX)
+        # check if the lander is in the screen, loop to other side if not
+        if app.player.y >= app.height - 25:
+            app.player.y = app.height - 25
+            app.player.vy = 0
+
+        if app.player.x >= app.width - (app.width * .2):
+            app.player.x = app.width - (app.width * .2)
+            for xPoint in range(1, len(app.planet.points), 2):
+                app.planet.points[xPoint - 1] = float(
+                    np.subtract(app.planet.points[xPoint - 1], deltaX)
+                )
+                if isinstance(app.planet, Jupiter):
+                    app.planet.hazardX = float(
+                        np.subtract(app.planet.hazardX, deltaX))
+            for xPointFlat in range(len(app.planet.listFlats)):
+                app.planet.listFlats[xPointFlat][0] = float(
+                    np.subtract(app.planet.listFlats[xPointFlat][0], deltaX)
+                )
+        if app.player.x <= app.width * .2:
+            app.player.x = app.width * .2
+            for xPoint in range(1, len(app.planet.points), 2):
+                app.planet.points[xPoint - 1] = float(
+                    np.add(app.planet.points[xPoint - 1], deltaX)
+                )
+                if isinstance(app.planet, Jupiter):
+                    app.planet.hazardX = float(
+                        np.subtract(app.planet.hazardX, deltaX))
+            for xPointFlat in range(len(app.planet.listFlats)):
+                app.planet.listFlats[xPointFlat][0] = float(
+                    np.add(app.planet.listFlats[xPointFlat][0], deltaX)
+                )
+
+        # rotation
+        if app.player.rotateRate != 0:
+            app.player.angle = ((app.now - app.player.rotationStartTime)
+                                * app.player.rotateRate + app.player.baseAngle)
+
+        sin1 = math.sin(app.player.angle)
+        cos1 = math.cos(app.player.angle)
+
+        # Position update
+
+        # These equations rotate the points of the lander and
+        # Flame around 0,0 and then translates that rotated object to
+        # the app.player.x/y that is calculated using the physics kinematics
+        for i in range(0, len(app.player.points), 2):
+            app.player.renderPoints[i] = (float(
+                np.add(app.player.x, app.player.points[i]
+                       * cos1 - app.player.points[i + 1] * sin1))
+            )
+            app.player.renderPoints[i + 1] = (float(
+                np.add(app.player.y,
+                       app.player.points[i + 1] * cos1 +
+                       app.player.points[i] * sin1))
+            )
+        for i in range(0, len(app.player.flamePoints1), 2):
+            app.player.renderFlame1[i] = (
+                float(np.add(app.player.x, app.player.flamePoints1[i] * cos1
+                             - app.player.flamePoints1[i + 1] * sin1))
+            )
+            app.player.renderFlame1[i + 1] = (
+                float(np.add(app.player.y, app.player.flamePoints1[i + 1]
+                             * cos1 + app.player.flamePoints1[i] * sin1))
+            )
+
+        for i in range(0, len(app.player.flamePoints2), 2):
+            app.player.renderFlame2[i] = (
+                float(np.add(app.player.x, app.player.flamePoints2[i] * cos1 -
+                             app.player.flamePoints2[i + 1] * sin1))
+            )
+            app.player.renderFlame2[i + 1] = (
+                float(
+                    np.add(app.player.y, app.player.flamePoints2[i + 1] * cos1 +
+                           app.player.flamePoints2[i] * sin1))
+            )
+
+        # if the thrust is off only gravity applies
+        if not app.thrustOn:
+            app.sound1.pause()
+            app.player.ay = app.gravityCurrent
+            app.player.ax = 0
+
+        if app.thrustOn and app.player.fuel >= 0:
+            app.sound1.play(restart=False)
+            app.thrustVariationCounter += 1
+            app.player.fuel -= 1
+            app.player.ay = (app.gravityCurrent + app.player.thrustCount
+                             * math.sin(app.player.angle - (math.pi / 2)))
+            app.player.ax = app.player.thrustCount * math.cos(app.player.angle
+                                                              - (math.pi / 2))
+
+        # check if fuel is empty and keep it from going negative
+        if app.player.fuel <= 0:
+            app.player.fuel = 0
+
+    # Collisions
+    if checkGroundCollisions(app):
+        app.stopMoving = True
+        if checkLanding(app):
+            app.explodeShip = True
+            app.player.visible = False
+
+        else:
+            app.safeLanding = True
+
+
+    deltaFrame = app.now - app.timeLastFrame
+
+    if deltaFrame > 1:
+        app.fps = int(app.frameCount / deltaFrame)
+        app.frameCount = 0
+        app.timeLastFrame = app.now
+
+    app.timeLast = app.now
+    app.frameCount += 1
+
+
+def game_redrawAll(app):
+    drawImage(app.gameBack, 0, 0)
+    if app.hasHazard:
+        app.planet.drawHazard(app)
+
+    if app.gameOver and not app.player.visible:
+        drawLabel(
+            "You Crashed!", app.width // 2, app.height // 4,
+            fill='orange', size=30
+        )
+        drawLabel(
+            f'Score: {app.player.score}',
+            app.width // 2, app.height * .375,
+            fill='lightGray', size=20, bold=True)
+        drawLabel(
+            "Press M to return to Menu", app.width // 2, app.height * .3125,
+            fill='orange', size=30
+        )
+        if isinstance(app.planet, Sun):
+            drawLabel(
+                "Did you really try to fly into the sun?", app.width // 8,
+                app.height * .1625, fill='orange', size=15, rotateAngle = -45
+            )
+
+    if app.stopMoving and app.safeLanding and app.player.visible:
+        drawLabel(
+            "Nice Landing!", app.width // 2, app.height // 4, fill='orange',
+            size=30
+        )
+
+        drawLabel(
+            "Press C to Continue", app.width // 2, app.height * .3125,
+            fill='orange', size=30
+        )
+
+    if app.explodeShip:
+        app.player.animateExplosion(app)
+
+    else:
+        app.player.drawLander(app)
+        if app.thrustOn and not app.player.fuel <= 0 and not app.stopMoving:
+            app.player.drawFlame(app)
+
+    # draw current planet surface
+    app.planet.drawPlanet(app)
+
+
+    # labels for displaying information
+    drawLabel(
+        f'Horizontal Velocity: {int(app.player.vx // 10)}',
+        app.width * .866667, app.height * .0625, fill='white', font='monospace',
+        size=15, bold=True
+    )
+    drawLabel(
+        f'Vertical Velocity: {int(app.player.vy // 10)}', app.width * .866667,
+                                                          app.height * .0875,
+        fill='white', font='monospace', size=15, bold=True
+    )
+    drawLabel(
+        f'Angle: {int((app.player.angle * 180 / math.pi) % 360)}',
+        app.width * .866667, app.height * .1125, fill='white', font='monospace',
+        size=15, bold=True
+    )
+    drawLabel(
+        f'Fuel: {app.player.fuel}', app.width * .0166667, app.height * .025,
+        fill='white', font='monospace', size=15, bold=True, align='left'
+    )
+    drawLabel(
+        f'Points: {app.player.score}', app.width * .0166667, app.height * .05,
+        fill='white', font='monospace', size=15, bold=True, align='left'
+    )
+
+    drawLabel(f'fps: {app.fps}', 200, 40, fill='white')
+    #
+
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# PLAYER INPUT
+""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def game_onKeyPress(app, key):
+    if key == 'space' and app.player.fuel > 0:
+        app.thrustOn = True
+
+    if app.stopMoving and not app.explodeShip and key == 'c':
+        app.player.score += 10 * app.multiplierValue
+        app.player.fuel += 100
+        app.player.repositionShip()
+        app.stopMoving = False
+
+    if key == 'm' or key == 'M':
+        app.leaderBoardList.append((app.player.score, app.name))
+        app.leaderBoardList = sorted(app.leaderBoardList)
+        app.leaderBoardList = app.leaderBoardList[::-1]
+        setActiveScreen('menu')
+        resetGame(app)
+
+    if key == 'right' and not app.player.rotateRate != 0:
+        app.player.rotateRight()
+
+    if key == 'left' and not app.player.rotateRate != 0:
+        app.player.rotateLeft()
+
+
+def game_onKeyRelease(app, key):
+    if key == 'space':
+        app.thrustOn = False
+        app.sound1.pause()
+    if key == 'right':
+        app.player.rotateRate = 0
+        app.player.baseAngle = app.player.angle
+    if key == 'left':
+        app.player.rotateRate = 0
+        app.player.baseAngle = app.player.angle
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? COLLISION AND LANDING DETECTION
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def checkGroundCollisions(app):
+    planetPoints = app.planet.renderPoints
+    shipRangeL = app.player.x - 100
+    shipRangeR = app.player.x + 100
+
+    for shipPoint in range(1, len(app.player.renderPoints), 2):
+        if app.hasHazard:
+            if isinstance(app.planet, Pluto):
+                dist = distance(app.planet.hazardX, app.planet.hazardY,
+                            app.player.renderPoints[shipPoint - 1],
+                            app.player.renderPoints[shipPoint])
+                if dist < 35:
+                    return True
+            if isinstance(app.planet, Venus):
+                dist = ((((app.player.renderPoints[shipPoint - 1] - app.planet.hazardX) ** 2) /
+                    ((.5 * app.planet.hazardW) ** 2)) +
+                        (((app.player.renderPoints[shipPoint] - app.planet.hazardY) ** 2) /
+                    ((.5 * app.planet.hazardH) ** 2)))
+
+                if dist <= 1:
+                    return True
+
+                halfWidth = app.planet.hazardW * .5
+
+                if ((app.planet.hazardX - halfWidth <=
+                    app.player.renderPoints[shipPoint - 1]
+                    <= app.planet.hazardX + halfWidth) and
+                    (app.player.renderPoints[shipPoint] >=
+                    app.planet.hazardY)):
+                    return True
+            if isinstance(app.planet, Mercury):
+                dist = distance(app.planet.hazardX, app.planet.hazardY,
+                                app.player.renderPoints[shipPoint - 1],
+                                app.player.renderPoints[shipPoint])
+                if dist < 35:
+                    return True
+            if isinstance(app.planet, Jupiter):
+                points = app.planet.hazardPoints
+                if containPoint(app.player.renderPoints[shipPoint - 1],
+                app.player.renderPoints[shipPoint], points):
+                    return True
+
+
+        for index in range(3, len(planetPoints), 2):
+
+            if not shipRangeL <= planetPoints[index - 3] <= shipRangeR:
+                continue
+            slope = (getSlope(
+                planetPoints[index - 3], planetPoints[index - 2],
+                planetPoints[index - 1], planetPoints[index]))
+
+            belowY = (
+                    slope * (app.player.renderPoints[shipPoint - 1] -
+                             planetPoints[index - 3]) + planetPoints[index - 2]
+            )
+
+            if (planetPoints[index - 3] <=
+                    app.player.renderPoints[shipPoint - 1] <=
+                    planetPoints[index - 1] and
+                    app.player.renderPoints[shipPoint] >= belowY
+            ):
+                return True
+    return False
+
+
+def checkLanding(app):
+    isInbetweenPoints = False
+    points = sorted(app.planet.listFlats)
+
+    for pointIndex in range(1, len(app.planet.listFlats), 2):
+        if points[pointIndex - 1][0] <= app.player.x <= points[pointIndex][0]:
+            isInbetweenPoints = True
+            app.multiplierValue = points[pointIndex - 1][2]
+    if not isInbetweenPoints:
+        return True
+    if 345 >= (app.player.angle * 180 / math.pi) % 360 >= 15:
+        return True
+    if ((abs(int(app.player.vx // 10)) >= 4) or
+            (abs(int(app.player.vy // 10)) >= 10)):
+        return True
+    else:
+        return False
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? HELPER FUNCTIONS
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def loadSound(relativePath):
+    # From TA Shawn's Sound Demo
+    absolutePath = os.path.abspath(relativePath)
+    url = pathlib.Path(absolutePath).as_uri()
+    return Sound(url)
+
+
+def getSlope(x1, y1, x2, y2):
+    slope = (y2 - y1) / (x2 - x1)
+    return slope
+
+def triangleArea(x1, y1, x2, y2, x3, y3):
+   return abs((x1 * (y2 - y3) + x2 * (y3 - y1)
+                + x3 * (y1 - y2)) ) / 2
+
+
+# ! check if a point is inside a triangle
+def containPoint(x, y, points):
+    x1, y1, x2, y2, x3, y3 = points
+
+    triOriginal = triangleArea(x1, y1, x2, y2, x3, y3)
+    triA = triangleArea(x, y, x1, y1, x2, y2)
+    triB = triangleArea(x, y, x2, y2, x3, y3)
+    triC = triangleArea(x, y, x3, y3, x1, y1)
+
+    return triOriginal == triA + triB + triC
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? MENU CODE
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def menu_redrawAll(app):
+    drawImage(app.back, 0, 0)
+
+
+def menu_onStep(app):
+    app.music.play(restart=False)
+
+
+def menu_onKeyPress(app, key):
+    if 'space' == key:
+        setActiveScreen('nameScreen')
+    if 'l' == key or 'L' == key:
+        setActiveScreen('leaderboard')
+
+
+def menu_onAppStart(app):
+    app.back = Image.open('startMenu.png')
+    app.back = app.back.resize((app.width, app.height))
+    app.back = CMUImage(app.back)
+    app.music = loadSound("music.mp3")
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? LEADERBOARD CODE
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def leaderboard_onAppStart(app):
+    app.leaderBoardList = [(90, 'MAKAYLA'), (60, 'QUINCY'), (40, 'BEN')]
+    app.backLeader = Image.open('SpaceLeaderboard.jpg')
+    app.backLeader = app.backLeader.resize((app.width, app.height))
+    app.backLeader = CMUImage(app.backLeader)
+    app.displayBoard = ''
+    app.music = loadSound("music.mp3")
+
+def leaderboard_redrawAll(app):
+    drawImage(app.backLeader, 0, 0)
+    drawRect(app.width // 2, app.height // 2, app.width * .26667,
+             app.height * .75, align='center', opacity=50
+             )
+
+    drawRect(app.width * .1, app.height * .9375, app.width * .13333,
+             app.height * .0625, align='center',
+             fill='gray', opacity=50, border='cyan')
+    drawLabel("Press M for Menu", app.width * .1, app.height * .9375,
+              fill='cyan', size=15
+              )
+    drawLabel("Leaderboard", app.width // 2, app.height * .0625, align='center',
+              fill='white', bold=True, font='monospace', size=60)
+
+    if len(app.leaderBoardList) > 12:
+        for countNames in range(12):
+            drawLabel(f'{app.leaderBoardList[countNames][1]}:' +
+                      f'{app.leaderBoardList[countNames][0]}',
+                      app.width // 2, (app.height * .15) +
+                      (app.height * .05) * countNames, size=40,
+                      fill='white', font='monospace', align='center')
+    else:
+        for countNames in range(len(app.leaderBoardList)):
+            drawLabel(f'{app.leaderBoardList[countNames][1]}:' +
+                      f'{app.leaderBoardList[countNames][0]}',
+                      app.width // 2, (app.height * .15) +
+                      (app.height * .05) * countNames, size=40,
+                      fill='white', font='monospace', align='center')
+
+
+def leaderboard_onKeyPress(app, key):
+    if key == 'm' or key == 'M':
+        setActiveScreen('menu')
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# ? ENTER NAME SCREEN
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def nameScreen_onAppStart(app):
+    app.nameMessage = ''
+    app.nameMenuBack = Image.open('nameMenu.jpg')
+    app.nameMenuBack = app.nameMenuBack.resize((app.width, app.height))
+    app.nameMenuBack = CMUImage(app.nameMenuBack)
+
+    app.controls = Image.open('controls.png')
+    app.controls = app.controls.resize(
+        (int(app.width * .6), int(app.height * .75))
+    )
+    app.controls = CMUImage(app.controls)
+    app.music = loadSound("music.mp3")
+
+
+def nameScreen_redrawAll(app):
+    drawImage(app.nameMenuBack, 0, 0)
+    drawImage(app.controls, app.width // 2, app.height // 4, align='center')
+    drawLabel(f'{app.nameMessage}', app.width // 2, app.height * .65625,
+              align='center', fill='cyan', size=40)
+
+
+def nameScreen_onKeyPress(app, key):
+    if (key.isalpha() and not key == 'space' and len(app.nameMessage) < 7 and
+            not key == 'backspace' and not key == 'enter'):
+        app.nameMessage += key.upper()
+    if key == 'backspace':
+        app.nameMessage = app.nameMessage[:len(app.nameMessage) - 1]
+    if key == 'enter':
+        app.name = app.nameMessage
+        setActiveScreen('levelSelect')
+        app.nameMessage = ''
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# Level Select
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+def levelSelect_onAppStart(app):
+    app.selectedLevel = 'mercury'
+    app.levelSelect = Image.open('solarSystem.png')
+    app.levelSelect = app.levelSelect.resize(
+        (app.width, int(app.height * 1.0125)))
+    app.levelSelect = CMUImage(app.levelSelect)
+    app.music = loadSound("music.mp3")
+
+
+def levelSelect_redrawAll(app):
+    drawImage(app.levelSelect, 0, 0)
+    drawLabel("Choose Landing Target",
+              app.width * .3333, app.height * .75, size=40,
+              align='center', fill='cyan', bold=True,
+              font='monospace')
+
+
+def levelSelect_onKeyPress(app, key):
+    app.selectedLevel = None
+
+    if key == '1':
+        app.selectedLevel = 'sun'
+    elif key == '2':
+        app.selectedLevel = 'mercury'
+    elif key == '3':
+        app.selectedLevel = 'venus'
+    elif key == '4':
+        app.selectedLevel = 'earth'
+    elif key == '5':
+        app.selectedLevel = 'jupiter'
+    elif key == '6':
+        app.selectedLevel = 'pluto'
+    if app.selectedLevel is not None:
+        resetGame(app)
+        setActiveScreen('game')
+
+
+def main():
+    runAppWithScreens(initialScreen='menu')
+
+
+if __name__ == '__main__':
+    main()
